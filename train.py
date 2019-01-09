@@ -3,6 +3,7 @@ import sys
 import random
 import numpy as np
 import tensorflow as tf
+from PIL import Image
 import pdb
 from model import VariationalAutoEncoder
 
@@ -38,6 +39,23 @@ def get_batches(x, batch_size):
 
     return batches
 
+
+def merge(images):
+    new_im = Image.new(mode='L',size=(8*28, 8*28))
+    x_offset = 0
+    y_offset = 0
+    for i in range(images.shape[0]):
+        im = images[i,:,:,0]
+        im = Image.fromarray(im)
+        new_im.paste(im, (x_offset,y_offset))
+        x_offset += 28
+        ii = i+1
+        if ii % 8 == 0:
+            x_offset = 0
+            y_offset += 28
+    return new_im
+
+
 def train():
 
     # ------------------------------ setting ------------------------------ #
@@ -67,13 +85,23 @@ def train():
     vae.build_network()
     vae.build_loss_function()
     vae.build_optimiser()
+    vae.build_generator()
 
     saver = tf.train.Saver(max_to_keep=1)
 
     batch_size = 1000
-    num_epochs = 100
+    num_epochs = 50
 
     batches = get_batches(x_train, batch_size)
+    z1 = np.linspace(-1.2, 1.2, num=8)
+    z2 = np.linspace(-1.2, 1.2, num=8)
+    my_z_gen = np.zeros((64,2))
+    k = 0
+    for i in z1:
+        for j in z2:
+            my_z_gen[k, 0] = i
+            my_z_gen[k, 1] = j
+            k += 1
 
     with tf.Session(config=sess_config) as sess:
         sess.run(tf.global_variables_initializer())
@@ -87,7 +115,17 @@ def train():
                     print("epoch: {} --- loss: {:.5f}".format(epoch, loss))
 
             # print("################## EPOCH {} done ##################".format(epoch))
-        saver.save(sess, save_path + '/model', global_step=epoch)
+            if epoch % 2 == 0:
+                saver.save(sess, save_path + '/model', global_step=epoch)
+                # generate image
+                feed_dict = {vae.z_gen: my_z_gen}
+                [output_gen] = sess.run([vae.output_gen], feed_dict=feed_dict)
+                output_gen = np.multiply(255, output_gen)
+                output_gen = np.array(output_gen, dtype=float)
+                result_name = 'results/gen-' + str(epoch) + '.jpg'
+                new_img = merge(output_gen)
+                new_img.save(result_name)
+
 
 def main():
     train()

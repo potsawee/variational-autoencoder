@@ -4,7 +4,7 @@ from helper import *
 class VariationalAutoEncoder(object):
     def __init__(self):
         self.z_size = 2
-        self.learning_rate = 0.00005
+        self.learning_rate = 0.0001
 
     def build_network(self):
         # this inputs must be normalised so that 0.0 to 1.0
@@ -79,3 +79,23 @@ class VariationalAutoEncoder(object):
         gradients = tf.gradients(self.loss, trainable_params)
         optimizer = tf.train.AdamOptimizer(self.learning_rate)
         self.train_op = optimizer.apply_gradients(zip(gradients, trainable_params))
+
+    def build_generator(self):
+        self.z_gen = tf.placeholder(tf.float32, [64, self.z_size], name="z_gen")
+        with tf.variable_scope("decoder", reuse=True):
+            # Fully connected layer
+            fc1 = fc_layer(self.z_gen, num_inputs=self.z_size, num_outputs=128, name="fc1")
+            relu_fc1 = relu_layer(fc1, name="relu_fc1")
+
+            fc2 = fc_layer(relu_fc1, num_inputs=128, num_outputs=7*7*32, name="fc2")
+            relu_fc2 = relu_layer(fc2, name="relu_fc2")
+
+            # Reshape to be [None, height, width, depth]
+            hidden = tf.reshape(relu_fc2, shape=[64, 7, 7, 32])
+
+            # Deconvolution
+            convt1 = conv_transpose_layer(hidden, output_shape=[64, 14, 14, 16], ksize=5, stride=2, name="convt1")
+            relu_convt1 = relu_layer(convt1, name="relu_convt1")
+
+            convt2 = conv_transpose_layer(relu_convt1, output_shape=[64, 28, 28, 1], ksize=5, stride=2, name="convt2")
+            self.output_gen = tf.nn.sigmoid(convt2)
