@@ -3,31 +3,17 @@ import sys
 import random
 import numpy as np
 import tensorflow as tf
-from PIL import Image
 import pdb
 from model import VariationalAutoEncoder
+from helper import *
 
-def load_data(path):
-    # data from Kaggle - Digit Recogniser
-    with open(path, 'r') as file:
-        lines = file.readlines()
-    num = len(lines) - 1
-    x = np.zeros(shape=(num,784))
-    # y = np.zeros(shape=(num))
-
-    lines = lines[1:] # ignore pixel0, pixel1,...
-    np.random.shuffle(lines)
-
-    for i, line in enumerate(lines[1:]):
-        items = line.strip().split(',')
-        # y[i] = int(items[0])
-        for j, val in enumerate(items[1:]):
-            x[i,j] = int(val) / 255 # normalise
-    return x
-
-def get_batches(x, batch_size):
+def get_batches(x, batch_size, dimension=28):
     num = x.shape[0]
-    _x = np.reshape(x, (num, 28, 28, 1))
+
+    # for mnist data
+    # _x = np.reshape(x, (num, dimension, dimension, 1))
+
+    _x = x
 
     batches = []
 
@@ -38,22 +24,6 @@ def get_batches(x, batch_size):
         batches.append(batch)
 
     return batches
-
-
-def merge(images):
-    new_im = Image.new(mode='L',size=(8*28, 8*28))
-    x_offset = 0
-    y_offset = 0
-    for i in range(images.shape[0]):
-        im = images[i,:,:,0]
-        im = Image.fromarray(im)
-        new_im.paste(im, (x_offset,y_offset))
-        x_offset += 28
-        ii = i+1
-        if ii % 8 == 0:
-            x_offset = 0
-            y_offset += 28
-    return new_im
 
 
 def train():
@@ -67,17 +37,27 @@ def train():
 
     else: # development only e.g. air202
         print('running locally...')
-        os.environ['CUDA_VISIBLE_DEVICES'] = '3' # choose the device (GPU) here
+        os.environ['CUDA_VISIBLE_DEVICES'] = '1' # choose the device (GPU) here
 
     sess_config = tf.ConfigProto(allow_soft_placement=True)
     sess_config.gpu_options.allow_growth = True # Whether the GPU memory usage can grow dynamically.
     sess_config.gpu_options.per_process_gpu_memory_fraction = 0.95 # The fraction of GPU memory that the process can use.
     # --------------------------------------------------------------------- #
 
-    data_path = '/home/alta/BLTSpeaking/ged-pm574/my-projects/mnist/data/train.csv'
-    x_train = load_data(data_path)
+    # MNIST
+    # data_path = '/home/alta/BLTSpeaking/ged-pm574/my-projects/mnist/data/train.csv'
+    # x_train = load_data(data_path)
 
-    save_path = 'save/vae-v1'
+    # DOGS
+    data_train = 'data/dogs/train/'
+    data_test = 'data/dogs/test/'
+    x_train = load_dog_images(data_train)
+    print('load train done...')
+    # x2 = load_dog_images(data_test)
+    # print('load test done...')
+    # x_train = np.concatenate((x_train,x2), axis=0)
+
+    save_path = 'save/dogs2/vae-v1'
     if not os.path.exists(save_path):
         os.makedirs(save_path)
 
@@ -89,19 +69,13 @@ def train():
 
     saver = tf.train.Saver(max_to_keep=1)
 
-    batch_size = 1000
-    num_epochs = 50
+    batch_size = 512
+    num_epochs = 2000
 
     batches = get_batches(x_train, batch_size)
-    z1 = np.linspace(-1.2, 1.2, num=8)
-    z2 = np.linspace(-1.2, 1.2, num=8)
-    my_z_gen = np.zeros((64,2))
-    k = 0
-    for i in z1:
-        for j in z2:
-            my_z_gen[k, 0] = i
-            my_z_gen[k, 1] = j
-            k += 1
+
+    my_z_gen = np.random.normal(0.0,1.0,size=(64,vae.z_size))
+
 
     with tf.Session(config=sess_config) as sess:
         sess.run(tf.global_variables_initializer())
@@ -122,8 +96,8 @@ def train():
                 [output_gen] = sess.run([vae.output_gen], feed_dict=feed_dict)
                 output_gen = np.multiply(255, output_gen)
                 output_gen = np.array(output_gen, dtype=float)
-                result_name = 'results/gen-' + str(epoch) + '.jpg'
-                new_img = merge(output_gen)
+                result_name = 'results/dogs2/gen-' + str(epoch) + '.jpg'
+                new_img = merge(output_gen, dimension=200)
                 new_img.save(result_name)
 
 
